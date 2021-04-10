@@ -3,6 +3,8 @@ version: '3'
 services:
     video-streaming:
         image: video-streaming:dev
+        container_name: video-streaming
+        build: 
             context: ./video-streaming
             dockerfile: dev.Dockerfile
         ports: 
