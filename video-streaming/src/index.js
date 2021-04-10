@@ -10,7 +10,9 @@ const DBHOST = process.env.DBHOST;
 const DBNAME = process.env.DBNAME;
 
 async function main () {
-  const client = await mongodb.MongoClient.connect(DBHOST);
+  const client = await mongodb.MongoClient.connect(DBHOST, {
+    useUnifiedTopology: true
+  });
   const db = client.db(DBNAME);
   const videosCollection = db.collection("videos");
   // Registers a HTTP get route for video streamming
