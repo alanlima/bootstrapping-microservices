@@ -1,6 +1,7 @@
 const express = require("express");
 const http = require("http");
 const mongodb = require('mongodb');
+const amqp = require('amqplib');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -8,6 +9,27 @@ const VIDEO_STORAGE_HOST = process.env.VIDEO_STORAGE_HOST;
 const VIDEO_STORAGE_PORT = parseInt(process.env.VIDEO_STORAGE_PORT);
 const DBHOST = process.env.DBHOST;
 const DBNAME = process.env.DBNAME;
+const RABBIT = process.env.RABBIT;
+
+
+async function connectRabbit() {
+  console.log(`Connecting to RabbitMQ server at ${RABBIT}`);
+  const messagingConnection = await amqp.connect(RABBIT);
+  console.log('Connected to RabbitMQ');
+  return await messagingConnection.createChannel();
+}
+
+/**
+ * Send the "viewed" to the history microservice.
+ * @param {amqp.Channel} messageChannel
+ * @param {string} videoPath 
+ */
+function sendViewerMessage(messageChannel, videoPath) {
+  console.log(`Publishing message on 'viewed' queue`);
+  const msg = JSON.stringify({ videoPath });
+  // Publish message to "viewed" queue
+  messageChannel.publish('', 'viewed', Buffer.from(msg));
+}
 
 async function main () {
   const client = await mongodb.MongoClient.connect(DBHOST, {
@@ -15,10 +37,13 @@ async function main () {
   });
   const db = client.db(DBNAME);
   const videosCollection = db.collection("videos");
+  const messageChannel = await connectRabbit();
   // Registers a HTTP get route for video streamming
-  app.get("/video", (req_1, res) => {
+  app.get("/video", (req, res) => {
 
-    const videoId = new mongodb.ObjectId(req_1.query.id);
+    console.log(JSON.stringify(req.headers));
+
+    const videoId = new mongodb.ObjectId(req.query.id);
     videosCollection
       .findOne({ _id: videoId })
       .then(videoRecord => {
@@ -32,7 +57,7 @@ async function main () {
           port: VIDEO_STORAGE_PORT,
           path: `/video?path=${videoRecord.videoPath}`,
           method: 'GET',
-          headers: req_1.headers,
+          headers: req.headers,
         }, forwardResponse => {
           res.writeHead(
             forwardResponse.statusCode,
@@ -41,7 +66,11 @@ async function main () {
           forwardResponse.pipe(res);
         });
 
-        req_1.pipe(forwardRequest);
+        req.pipe(forwardRequest);
+
+        if(!req.headers.referer) {
+          sendViewerMessage(messageChannel, videoRecord.videoPath);
+        }
       })
       .catch(err => {
         console.error("Database query failed.");

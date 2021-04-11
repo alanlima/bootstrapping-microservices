@@ -18,6 +18,10 @@ services:
             - VIDEO_STORAGE_PORT=8080
             - DBHOST=mongodb://db:27017
             - DBNAME=video-streaming
+            - RABBIT=amqp://guest:guest@rabbit:5672
+        depends_on: 
+            - db
+            - rabbit
     
     azure-storage:
         image: azure-storage:dev
@@ -56,4 +60,20 @@ services:
         environment: 
             - PORT=80
             - NODE_ENV=development
+            - DBHOST=mongodb://db:27017
+            - DBNAME=video-streaming
+            - RABBIT=amqp://guest:guest@rabbit:5672
+        depends_on: 
+            - db
+            - rabbit
         
+    rabbit:
+        image: rabbitmq:3.8.14-management
+        container_name: rabbit
+        ports:
+            - '5672:5672'
+            - '15672:15672'
+        expose: 
+            - '5672'
+            - '15672'
+        restart: always
