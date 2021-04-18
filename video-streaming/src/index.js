@@ -12,11 +12,17 @@ const DBNAME = process.env.DBNAME;
 const RABBIT = process.env.RABBIT;
 
 
+/**
+ * Establish a connection with the RabbitMQ server
+ * @returns {amqp.Channel} the created channel instance
+ */
 async function connectRabbit() {
   console.log(`Connecting to RabbitMQ server at ${RABBIT}`);
   const messagingConnection = await amqp.connect(RABBIT);
   console.log('Connected to RabbitMQ');
-  return await messagingConnection.createChannel();
+  const channel = await messagingConnection.createChannel();
+  await channel.assertExchange("viewed", "fanout");
+  return channel;
 }
 
 /**
@@ -28,7 +34,7 @@ function sendViewerMessage(messageChannel, videoPath) {
   console.log(`Publishing message on 'viewed' queue`);
   const msg = JSON.stringify({ videoPath });
   // Publish message to "viewed" queue
-  messageChannel.publish('', 'viewed', Buffer.from(msg));
+  messageChannel.publish('viewed', '', Buffer.from(msg));
 }
 
 async function main () {

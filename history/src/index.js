@@ -35,6 +35,12 @@ async function connectRabbit() {
   return await messagingConnection.createChannel();
 }
 
+/**
+ * 
+ * @param {*} app 
+ * @param {mongodb.Db} db 
+ * @param {amqp.Channel} messageChannel 
+ */
 async function setupHandlers(app, db, messageChannel) {
   const videosCollection = db.collection("videos-history");
 
@@ -44,15 +50,18 @@ async function setupHandlers(app, db, messageChannel) {
     const parsedMsg = JSON.parse(msg.content.toString());
 
     await videosCollection.insertOne({
-      videoPath: parsedMsg.videoPath
+      videoPath: parsedMsg.videoPath,
+      viewedAt: new Date()
     });
 
     messageChannel.ack(msg);
   };
 
-  await messageChannel.assertQueue('viewed', {});
+  await messageChannel.assertExchange('viewed', 'fanout');
   console.log('Asserted that the viewed queue exists');
-  messageChannel.consume('viewed', consumeViewedMessage);
+  const queueResponse = await messageChannel.assertQueue("", { exclusive: true });
+  await messageChannel.bindQueue(queueResponse.queue, "viewed", "");
+  messageChannel.consume(queueResponse.queue, consumeViewedMessage);
 }
 
 function startHttpServer(db, messageChannel) {
